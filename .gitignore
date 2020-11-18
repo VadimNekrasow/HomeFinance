@@ -1,1 +1,3 @@
 venv/
+__pypache__/
+.idea/

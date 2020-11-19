@@ -1,0 +1,1 @@
+SELECT * FROM category ORDER BY IN_OUT, TITLE;

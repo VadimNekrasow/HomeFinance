@@ -1,1 +1,6 @@
 SELECT * FROM category ORDER BY IN_OUT, TITLE;
+SELECT DISTINCT subject FROM finance WHERE SUBJECT NOT NULL;
+SELECT * FROM category WHERE IN_OUT = 0;
+SELECT SUM(SUM) FROM finance JOIN category ON ID_CATEGORY = category.ID WHERE DATE <= "2020-08-31" GROUP BY category.IN_OUT;
+SELECT DISTINCT SUBJECT FROM finance JOIN category ON finance.ID_CATEGORY = category.ID WHERE SUBJECT NOT NULL AND category.IN_OUT = 0;
+SELECT DATE, SUM, SUBJECT, TITLE, IN_OUT FROM finance JOIN category ON finance.ID_CATEGORY = category.ID WHERE strftime("%Y",DATE) = "2020" AND strftime("%m",DATE) = "10" ORDER BY DATE DESC, finance.ID DESC;

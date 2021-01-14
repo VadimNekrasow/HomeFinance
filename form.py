@@ -1,18 +1,21 @@
 from PyQt5.QtWidgets import QWidget, QPushButton, QLineEdit, QListWidget, QToolBar, QVBoxLayout, QSizePolicy, \
-    QDialog, QButtonGroup, QRadioButton, QHBoxLayout, QTableWidget, QTableWidgetItem, QAbstractItemView, \
+    QDialog, QButtonGroup, QRadioButton, QHBoxLayout, QTableWidget, QAbstractItemView, QCheckBox, \
     QStyledItemDelegate, QLabel, QFrame, QComboBox, QCompleter, QCalendarWidget
-from PyQt5.QtGui import QIcon, QFont, QRegExpValidator, QPixmap
+from PyQt5.QtGui import QIcon, QFont, QRegExpValidator, QPainter, QPen
 from PyQt5.QtCore import Qt, QDate, QRegExp
+from PyQt5.QtChart import QChartView, QPieSeries, QChart, QPieSlice
 
 from datetime import datetime, timedelta
 from typing import NamedTuple
 from database import Database
+import calendar
 
 
 class Category(NamedTuple):
     id: int
     title: str
     in_out: int
+
 
 class Finance(NamedTuple):
     id: int
@@ -21,6 +24,92 @@ class Finance(NamedTuple):
     subject: str
     in_out: int
     category: str
+
+
+class DiagramForm(QWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.db = None
+        self.tool_bar = QToolBar(self)
+        self.action_inout = self.tool_bar.addAction("Доход/расход")
+        self.date_edit = CustomCalendar()
+        self.date_edit.button_up.clicked.connect(self.date_changed)
+        self.date_edit.button_down.clicked.connect(self.date_changed)
+        self.tool_bar.addWidget(self.date_edit)
+        self.action_inout.setIcon(QIcon("icons/consumption.ico"))
+        self.action_inout.triggered.connect(self.change_state_action_inout)
+        self.type_inout = False
+
+        #
+
+        #for item in db.get_sum_by_category():
+        #    series.append(item[1], item[0])
+
+        # series.append("Еда", 80)
+        # series.append("Хозяйственные товары", 40)
+        # series.append("Развлечения", 40)
+        # series.append("Еда", 80)
+        # series.append("Хозяйственные товары", 40)
+        # series.append("Развлечения", 40)
+
+
+
+        self.chart = QChart()
+        self.chart.setTheme(QChart.ChartThemeQt)
+        self.chart.setAnimationOptions(QChart.AllAnimations)
+        #self.chart.addSeries(series)
+        self.chart.legend().setAlignment(Qt.AlignRight)
+        font = QFont("Segoi UI", 11)
+        self.chart.legend().setFont(font)
+        self.chart.legend().setShowToolTips(True)
+        self.chart.setTitleFont(QFont("Segoi UI", 16))
+
+        chart_view = QChartView(self.chart)
+        chart_view.setRenderHint(QPainter.Antialiasing)
+        vbox = QVBoxLayout(self)
+        vbox.addWidget(self.tool_bar)
+        vbox.addWidget(chart_view)
+
+        #update_diagram()
+
+    def set_db(self, db):
+        self.db = db
+
+    def update_diagram(self):
+        year = self.date_edit.get_year()
+        month = self.date_edit.get_month()
+        date_format = f"WHERE strftime(\"%Y\",DATE) = \"{year}\" AND strftime(\"%m\",DATE) = \"{month:02}\""
+
+        series = QPieSeries()
+        for item in self.db.get_sum_by_category(date_format, self.type_inout):
+            series.append(item[1], item[0])
+
+        for slice in series.slices():
+            slice.setLabel(
+                slice.label() + ", " + f"{slice.value()}₽" + f" ({round(slice.value() / (series.sum() / 100))}%)")
+        series.clicked.connect(self.pressed)
+        self.chart.removeAllSeries()
+        self.chart.addSeries(series)
+        self.chart.setTitle("Доходы" if self.type_inout else "Расходы")
+
+    def date_changed(self):
+        self.update_diagram()
+
+    def change_state_action_inout(self):
+        self.action_inout.setIcon(QIcon("icons/income.ico" if not self.type_inout else "icons/consumption.ico"))
+        self.type_inout = not self.type_inout
+        self.update_diagram()
+
+    def pressed(self, slice):
+        for sl in slice.series().slices():
+            sl.setExploded(False)
+            sl.setLabelVisible(False)
+            sl.setPen(QPen(Qt.white, 0))
+
+        slice.setExploded(True)
+        slice.setLabelVisible(True)
+        slice.setPen(QPen(Qt.black, 2))
 
 
 class CategoryForm(QWidget):
@@ -330,6 +419,8 @@ class FinanceForm(QWidget):
 
         self.tool_bar = CustomToolBar()
         self.tool_bar.addSeparator()
+        self.tool_bar.action_edit.setDisabled(True)
+        self.tool_bar.action_del.setDisabled(True)
 
         self.action_inout = self.tool_bar.addAction("Доходы/расходы")
         self.action_inout.setIcon(QIcon("icons/money.ico"))
@@ -426,3 +517,36 @@ class CustomCalendar(QWidget):
 
     def get_month(self):
         return self.month
+
+
+class LoginForm(QWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        vboxLogin = QVBoxLayout(self)
+        self.editLogin = QLineEdit()
+        self.editLogin.setMinimumWidth(150)
+        self.editLogin.setPlaceholderText("Логин")
+        self.editPassword = QLineEdit()
+        self.editPassword.setMinimumWidth(150)
+        self.editPassword.setPlaceholderText("Пароль")
+        self.editPassword.setEchoMode(QLineEdit.Password)
+        self.buttonLogin = QPushButton("Вход")
+        self.buttonLogin.setMinimumWidth(150)
+        self.checkBox = QCheckBox("Запомнить меня")
+        self.labelErrorAboutLogin = QLabel("Неверный логин или пароль\n")
+        self.labelErrorAboutLogin.setAlignment(Qt.AlignHCenter)
+        self.labelErrorAboutLogin.setStyleSheet("color: red;")
+        self.labelErrorAboutLogin.setVisible(False)
+        vboxLogin.addStretch(5)
+        vboxLogin.addWidget(self.editLogin, 0, Qt.AlignCenter)
+        vboxLogin.addWidget(self.editPassword, 0, Qt.AlignCenter)
+        vboxLogin.addWidget(self.buttonLogin, 0, Qt.AlignCenter)
+        vboxLogin.addWidget(self.checkBox, 0, Qt.AlignCenter)
+        vboxLogin.addWidget(self.labelErrorAboutLogin, 0, Qt.AlignCenter)
+        vboxLogin.addStretch(5)
+
+    def clear(self):
+        self.editLogin.clear()
+        self.editPassword.clear()
+

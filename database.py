@@ -1,6 +1,8 @@
 import sqlite3
 import calendar
 
+from hashlib import sha256
+
 
 # calendar.monthrange(2020, 10)
 
@@ -178,11 +180,34 @@ class Database:
             print("Database.get_income_total_sum", error)
         return consumption
 
-    def get_finance_by_id(self, _id):
-        """Получить запись по ее ID"""
+    def get_sum_by_category(self, date_format: str, in_out: int):
         try:
-            self.cursor.execute("")
+            self.cursor.execute(
+                f"SELECT SUM(SUM), TITLE FROM finance JOIN category ON finance.ID_CATEGORY = category.ID {date_format} GROUP BY TITLE HAVING IN_OUT = ?;",
+                (in_out,))
         except sqlite3.Error as error:
             print("Database.get_finance_by_id", error)
+            return []
+        return self.cursor.fetchall()
+
+    def authorization(self, login, password):
+        try:
+            self.cursor.execute("SELECT LOGIN, PASSWORD FROM user WHERE LOGIN=?", (login, ))
+        except sqlite3.Error as error:
+            print("Database.authorization", error)
             return False
-        return True
+        data = self.cursor.fetchone()
+        if not data:
+            return False
+        if sha256(password.encode()).hexdigest() == data[1]:
+            return True
+        return False
+
+    # def get_finance_by_id(self, _id):
+    #     """Получить запись по ее ID"""
+    #     try:
+    #         self.cursor.execute("")
+    #     except sqlite3.Error as error:
+    #         print("Database.get_finance_by_id", error)
+    #         return False
+    #     return True

@@ -1,30 +1,42 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QStackedWidget, QHBoxLayout, QListWidgetItem, QMessageBox
-from PyQt5.QtGui import QPalette, QFont
+from PyQt5.QtWidgets import QApplication, QStackedWidget, QHBoxLayout, QListWidgetItem, QMessageBox, QTableWidgetItem, \
+    QMenuBar, QMenu, QAction, QDesktopWidget
+from PyQt5.QtGui import QPalette, QFont, QPixmap
 from datetime import datetime
 from database import Database
 from form import *
 
 
-class Window(QStackedWidget):
+class Window(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowIcon(QIcon("icons/homefinance.ico"))
-        self.resize(640, 480)
+        self.resize(320, 480)  # 320x480
         QApplication.setStyle("Fusion")
         self.setWindowTitle("HomeFinance")
 
+        screen_action = QAction(self)
+        screen_action.setShortcut("F12")
+        screen_action.triggered.connect(self.screenshot)
+        self.addAction(screen_action)
+
+
+
         self.db = Database()
+        self.is_auth = False
 
         self.list_category = []
         self.list_finance = []
 
-        self.form_category = CategoryForm()
+        self.form_login = LoginForm(self)
+        self.form_login.buttonLogin.clicked.connect(self.login)
+
+        self.form_category = CategoryForm(self)
         self.form_category.tool_bar.action_add.triggered.connect(self.open_category_dialog)
         self.form_category.tool_bar.action_edit.triggered.connect(self.update_category)
         self.form_category.tool_bar.action_del.triggered.connect(self.delete_category)
 
-        self.form_finance = FinanceForm()
+        self.form_finance = FinanceForm(self)
         self.form_finance.calendar.button_down.clicked.connect(self.change_calendar)
         self.form_finance.calendar.button_up.clicked.connect(self.change_calendar)
         self.form_finance.tool_bar.action_add.triggered.connect(self.new_finance)
@@ -33,13 +45,75 @@ class Window(QStackedWidget):
         self.form_finance.action_inout.triggered.connect(self.view_finance)
         self.form_finance.table.itemDoubleClicked.connect(self.update_finance)
 
+        self.form_diagram = DiagramForm(self)
+        self.form_diagram.set_db(db=self.db)
 
-        self.addWidget(self.form_finance)
-        self.addWidget(self.form_category)
+        self.stacked = QStackedWidget(self)
+        self.stacked.addWidget(self.form_finance)
+        self.stacked.addWidget(self.form_category)
+        self.stacked.addWidget(self.form_diagram)
+        self.stacked.addWidget(self.form_login)
 
-        # self.view_category()
-        # self.view_finance()
-        self.change_calendar()
+        self.menu_bar = QMenuBar(self)
+        self.menu = QMenu("Меню")
+        self.action_finance = QAction("Финансы", self)
+        self.action_finance.triggered.connect(lambda: self.stacked.setCurrentIndex(0))
+        self.action_category = QAction("Категории", self)
+        self.action_category.triggered.connect(self.view_form_category)
+        self.action_diagram = QAction("Графическая сводка", self)
+        self.action_diagram.triggered.connect(self.view_form_diagram)
+        self.action_exit = QAction("Выход", self)
+        self.action_exit.triggered.connect(self.close)
+        self.menu.addAction(self.action_finance)
+        self.menu.addAction(self.action_category)
+        self.menu.addAction(self.action_diagram)
+        self.menu.addSeparator()
+        self.menu.addAction(self.action_exit)
+        self.menu_bar.addMenu(self.menu)
+        self.menu.setDisabled(True)
+
+        vbox = QVBoxLayout(self)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.addWidget(self.menu_bar)
+        vbox.addWidget(self.stacked)
+
+        self.stacked.setCurrentIndex(3)
+
+    def screenshot(self):
+        #screen = QApplication.primaryScreen()
+        #if screen is not None:
+        #    originalPixmap = screen.grab(QApplication.desktop().winId())
+        #    print(datetime.now().strftime("%d-%m-%Y_%H.%M.%S") + '.jpg')
+        #    originalPixmap.save(datetime.now().strftime("%d-%m-%Y_%H.%M.%S")  + '.jpg', "jpg")
+        #    #print(datetime.now().strftime("%d-%m-%Y_%H.%M.%s")  + '.jpg')
+        # try:
+        #     desctop = QDesktopWidget()
+        #     pixmap = QPixmap(desctop.screenGeometry().size())
+        #     desctop.screen().render(pixmap)
+        #     print(datetime.now().strftime("%d-%m-%Y_%H.%M.%s")  + '.jpg')
+        #     pixmap.save(datetime.now().strftime("%d-%m-%Y_%H.%M.%s")  + '.jpg', 'jpg')
+        # except Exception as e:
+        #     print(e)
+        pass
+
+
+
+
+
+    def view_form_category(self):
+        if self.stacked.currentIndex() != 1:
+            self.view_category()
+            self.stacked.setCurrentIndex(1)
+
+    def view_form_diagram(self):
+        if self.stacked.currentIndex() != 2:
+            self.form_diagram.update_diagram()
+            self.stacked.setCurrentIndex(2)
+
+    def view_form_finance(self):
+        if self.stacked.currentIndex() != 0:
+            self.view_finance()
+            self.stacked.setCurrentIndex(0)
 
     def new_finance(self):
         """Открывает окно добавления новой записи"""
@@ -60,7 +134,6 @@ class Window(QStackedWidget):
         dialog.set_sum(self.list_finance[index].sum)
         dialog.set_subject(self.list_finance[index].subject)
         dialog.set_inout(self.list_finance[index].in_out)
-        # dialog.set_category(28)
         dialog.is_save = False
         dialog.setWindowTitle("Редактировать запись")
 
@@ -72,6 +145,14 @@ class Window(QStackedWidget):
             date = dialog.get_date()
             if self.db.update_finance(id_finance, _sum, subject, date, id_category):
                 self.view_finance()
+
+    def login(self):
+        """Функция авторизации"""
+        if self.db.authorization(self.form_login.editLogin.text(), self.form_login.editPassword.text()):
+            self.view_form_finance()
+            self.menu.setDisabled(False)
+        else:
+            self.form_login.clear()
 
     def change_calendar(self):
         """Вызывается при изменении даты на календаре"""
@@ -268,7 +349,7 @@ def main():
 
 def test():
     app = QApplication([])
-    win = FinanceDialog()
+    win = DiagramForm()
     win.show()
     sys.exit(app.exec())
 
